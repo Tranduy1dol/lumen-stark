@@ -113,7 +113,7 @@ impl Polynomial {
         Ok(rem)
     }
 
-    pub fn xor(&self, exponent: i128) -> Polynomial {
+    pub fn xor(&self, exponent: u128) -> Polynomial {
         if self.is_zero() {
             return Polynomial::default();
         }
