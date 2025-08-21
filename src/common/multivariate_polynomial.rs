@@ -194,7 +194,7 @@ impl Neg for MPolynomial {
     }
 }
 
-impl<'a> Neg for &'a MPolynomial {
+impl Neg for &MPolynomial {
     type Output = MPolynomial;
     fn neg(self) -> MPolynomial {
         let new_dict = self
@@ -214,7 +214,7 @@ impl Add for MPolynomial {
     }
 }
 
-impl<'a, 'b> Add<&'b MPolynomial> for &'a MPolynomial {
+impl<'b> Add<&'b MPolynomial> for &MPolynomial {
     type Output = MPolynomial;
     fn add(self, rhs: &'b MPolynomial) -> MPolynomial {
         if self.is_zero() {
@@ -260,7 +260,7 @@ impl Sub for MPolynomial {
     }
 }
 
-impl<'a, 'b> Sub<&'b MPolynomial> for &'a MPolynomial {
+impl<'b> Sub<&'b MPolynomial> for &MPolynomial {
     type Output = MPolynomial;
     fn sub(self, rhs: &'b MPolynomial) -> MPolynomial {
         self + &(-rhs)
@@ -275,7 +275,7 @@ impl Mul for MPolynomial {
     }
 }
 
-impl<'a, 'b> Mul<&'b MPolynomial> for &'a MPolynomial {
+impl<'b> Mul<&'b MPolynomial> for &MPolynomial {
     type Output = MPolynomial;
     fn mul(self, rhs: &'b MPolynomial) -> MPolynomial {
         if self.is_zero() || rhs.is_zero() {

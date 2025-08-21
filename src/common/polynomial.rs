@@ -132,7 +132,7 @@ impl Neg for Polynomial {
     }
 }
 
-impl<'a> Neg for &'a Polynomial {
+impl Neg for &Polynomial {
     type Output = Polynomial;
     fn neg(self) -> Polynomial {
         Polynomial::new(self.coeffs.iter().map(|c| -*c).collect())
@@ -146,7 +146,7 @@ impl Add for Polynomial {
     }
 }
 
-impl<'a, 'b> Add<&'b Polynomial> for &'a Polynomial {
+impl<'b> Add<&'b Polynomial> for &Polynomial {
     type Output = Polynomial;
     fn add(self, rhs: &'b Polynomial) -> Polynomial {
         if self.is_zero() {
@@ -178,7 +178,7 @@ impl Sub for Polynomial {
     }
 }
 
-impl<'a, 'b> Sub<&'b Polynomial> for &'a Polynomial {
+impl<'b> Sub<&'b Polynomial> for &Polynomial {
     type Output = Polynomial;
     fn sub(self, rhs: &'b Polynomial) -> Polynomial {
         self + &(-rhs)
@@ -192,7 +192,7 @@ impl Mul for Polynomial {
     }
 }
 
-impl<'a, 'b> Mul<&'b Polynomial> for &'a Polynomial {
+impl<'b> Mul<&'b Polynomial> for &Polynomial {
     type Output = Polynomial;
     fn mul(self, rhs: &'b Polynomial) -> Polynomial {
         if self.is_zero() || rhs.is_zero() {
