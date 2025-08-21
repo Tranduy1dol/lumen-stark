@@ -32,12 +32,11 @@ pub(crate) fn extended_gcd(x: i128, y: i128) -> (i128, i128, i128) {
 pub(crate) fn poly_long_division(
     numerator: Polynomial,
     denominator: Polynomial,
-) -> anyhow::Result<(Polynomial, Polynomial)> {
-    if denominator.is_zero() {
-        return Err(anyhow::anyhow!("Polynomial division by zero"));
-    }
+) -> (Polynomial, Polynomial) {
+    assert!(!denominator.is_zero(), "Denominator must not be zero.");
+
     if numerator.degree() < denominator.degree() {
-        return Ok((Polynomial::new(vec![]), numerator));
+        return (Polynomial::new(vec![]), numerator);
     }
 
     let field = denominator.coeffs[0].field;
@@ -63,7 +62,7 @@ pub(crate) fn poly_long_division(
         remainder = remainder.sub(subtractee)
     }
 
-    Ok((Polynomial::new(quotient_coeffs), remainder))
+    (Polynomial::new(quotient_coeffs), remainder)
 }
 
 /// Computes the unique polynomial of the smallest degree that passes through a given

@@ -34,7 +34,7 @@ impl Polynomial {
 
     /// Returns the degree of the polynomial.
     ///
-    /// The degree of the zero polynomial is defined as -1.
+    /// The degree of the zero polynomials is defined as -1.
     pub fn degree(&self) -> i128 {
         self.coeffs.len() as i128 - 1
     }
@@ -54,7 +54,8 @@ impl Polynomial {
     /// Returns the field to which the polynomial's coefficients belong.
     ///
     /// # Panics
-    /// Panics if called on the zero polynomial, which has no coefficients.
+    ///
+    /// Panics if called on the zero polynomials, which have no coefficients.
     pub fn field(&self) -> FieldElement {
         assert!(!self.is_zero(), "Zero polynomial has no field.");
         self.coeffs[0]
@@ -219,7 +220,7 @@ impl<'b> Mul<&'b Polynomial> for &Polynomial {
 impl Div for Polynomial {
     type Output = Self;
     fn div(self, rhs: Self) -> Self {
-        let (quo, rem) = math::poly_long_division(self, rhs).expect("Polynomial division failed");
+        let (quo, rem) = math::poly_long_division(self, rhs);
         assert!(
             rem.is_zero(),
             "Cannot perform polynomial division because remainder is not zero"
@@ -231,7 +232,7 @@ impl Div for Polynomial {
 impl Rem for Polynomial {
     type Output = Self;
     fn rem(self, rhs: Self) -> Self {
-        let (_, rem) = math::poly_long_division(self, rhs).expect("Polynomial division failed");
+        let (_, rem) = math::poly_long_division(self, rhs);
         rem
     }
 }
