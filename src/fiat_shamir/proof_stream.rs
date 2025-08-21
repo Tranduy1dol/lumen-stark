@@ -1,29 +1,39 @@
-use serde::{de::DeserializeOwned, Serialize};
+use std::marker::PhantomData;
+
+use serde::{Serialize, de::DeserializeOwned};
 use sha3::{
-    digest::{ExtendableOutput, Update, XofReader},
     Shake256,
+    digest::{ExtendableOutput, Update, XofReader},
 };
 
-/// A ProofStream helps construct a non-interactive proof transcript by serializing
-/// objects and using them to derive challenges via the Fiat-Shamir transform.
-///
-/// This is a Rust implementation that mirrors the functionality of the provided
-/// Python `ProofStream` class. It uses `serde` for serialization (like Python's `pickle`)
-/// and the `sha3` crate for SHAKE256 hashing.
-///
-/// The stream is generic over the type `T` of objects it can hold, requiring them
-/// to be serializable and deserializable.
-pub struct ProofStream<T: Serialize + DeserializeOwned> {
+use crate::common::transcript_serializer::TranscriptSerializer;
+use crate::fiat_shamir::bincode_serializer::BincodeSerializer;
+
+pub struct ProofStream<T, H = Shake256, S = BincodeSerializer>
+where
+    T: Serialize + DeserializeOwned,
+    H: ExtendableOutput + Update,
+    S: TranscriptSerializer,
+{
     pub objects: Vec<T>,
     pub read_index: usize,
+    _phantom_h: PhantomData<H>,
+    _phantom_s: PhantomData<S>,
 }
 
-impl<T: Serialize + DeserializeOwned> ProofStream<T> {
+impl<T, H, S> ProofStream<T, H, S>
+where
+    T: Serialize + DeserializeOwned,
+    H: ExtendableOutput + Update,
+    S: TranscriptSerializer,
+{
     /// Creates a new, empty `ProofStream`.
     pub fn new() -> Self {
         Self {
             objects: Vec::new(),
             read_index: 0,
+            _phantom_h: Default::default(),
+            _phantom_s: Default::default(),
         }
     }
 
@@ -50,26 +60,28 @@ impl<T: Serialize + DeserializeOwned> ProofStream<T> {
 
     /// Serializes all objects in the stream into a byte vector.
     ///
-    /// This uses `bincode` for a compact binary representation.
-    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize(&self.objects)
+    /// The serialization format is determined by the `S` type parameter.
+    pub fn serialize(&self) -> Result<Vec<u8>, S::Error> {
+        S::serialize(&self.objects)
     }
 
     /// Deserializes a byte slice into a `ProofStream`.
     ///
     /// The `read_index` of the new stream is initialized to 0.
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        let objects: Vec<T> = bincode::deserialize(bytes)?;
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, S::Error> {
+        let objects: Vec<T> = S::deserialize(bytes)?;
         Ok(Self {
             objects,
             read_index: 0,
+            _phantom_h: Default::default(),
+            _phantom_s: Default::default(),
         })
     }
 
     /// Computes a challenge for the prover using the Fiat-Shamir transform.
     ///
     /// It serializes *all* objects currently in the stream, hashes them with
-    /// SHAKE256, and returns the requested number of bytes.
+    /// the chosen hash function `H`, and returns the requested number of bytes.
     pub fn prover_fiat_shamir(&self, num_bytes: usize) -> Result<Vec<u8>, bincode::Error> {
         let mut hasher = Shake256::default();
         let serialized_objects = bincode::serialize(&self.objects)?;
@@ -83,7 +95,7 @@ impl<T: Serialize + DeserializeOwned> ProofStream<T> {
     /// Computes a challenge for the verifier using the Fiat-Shamir transform.
     ///
     /// It serializes only the objects that have been read so far (up to `read_index`),
-    /// hashes them with SHAKE256, and returns the requested number of bytes.
+    /// hashes them with the chosen hash function `H`, and returns the requested number of bytes.
     pub fn verifier_fiat_shamir(&self, num_bytes: usize) -> Result<Vec<u8>, bincode::Error> {
         let mut hasher = Shake256::default();
         let serialized_objects = bincode::serialize(&self.objects[..self.read_index])?;
@@ -95,7 +107,12 @@ impl<T: Serialize + DeserializeOwned> ProofStream<T> {
     }
 }
 
-impl<T: Serialize + DeserializeOwned> Default for ProofStream<T> {
+impl<T, H, S> Default for ProofStream<T, H, S>
+where
+    T: Serialize + DeserializeOwned,
+    H: ExtendableOutput + Update,
+    S: TranscriptSerializer,
+{
     fn default() -> Self {
         Self::new()
     }
