@@ -10,7 +10,7 @@ use crate::common::polynomial::Polynomial;
 ///
 /// We use `i128` to handle potential negative intermediate values for `s` and `t`,
 /// which is the standard and robust way to implement this algorithm.
-pub(crate) fn extended_gcd(x: i128, y: i128) -> (i128, i128, i128) {
+pub(super) fn extended_gcd(x: i128, y: i128) -> (i128, i128, i128) {
     let (mut old_r, mut r) = (x, y);
     let (mut old_s, mut s) = (1, 0);
     let (mut old_t, mut t) = (0, 1);
@@ -29,7 +29,7 @@ pub(crate) fn extended_gcd(x: i128, y: i128) -> (i128, i128, i128) {
 ///
 /// Given a numerator `N(x)` and a denominator `D(x)`, it returns a quotient `Q(x)`
 /// and a remainder `R(x)` such that `N(x) = D(x) * Q(x) + R(x)` and `deg(R) < deg(D)`.
-pub(crate) fn poly_long_division(
+pub(super) fn poly_long_division(
     numerator: Polynomial,
     denominator: Polynomial,
 ) -> (Polynomial, Polynomial) {
@@ -67,7 +67,7 @@ pub(crate) fn poly_long_division(
 
 /// Computes the unique polynomial of the smallest degree that passes through a given
 /// set of points `(domain[i], values[i])` using Lagrange interpolation.
-pub(crate) fn interpolate_domain(
+pub(super) fn interpolate_domain(
     domain: Vec<FieldElement>,
     values: Vec<FieldElement>,
 ) -> Polynomial {
@@ -112,7 +112,7 @@ pub(crate) fn interpolate_domain(
 
 /// Computes the polynomial that is zero on all points in the given domain.
 /// This is done by computing the product of `(x - d)` for all `d` in the domain.
-pub(crate) fn zerofier_domain(domain: Vec<FieldElement>) -> Polynomial {
+pub(super) fn zerofier_domain(domain: Vec<FieldElement>) -> Polynomial {
     let field = domain[0].field;
     let x = Polynomial::new(vec![field.zero(), field.one()]);
     let mut acc = Polynomial::new(vec![field.one()]);
@@ -124,7 +124,7 @@ pub(crate) fn zerofier_domain(domain: Vec<FieldElement>) -> Polynomial {
 
 /// Tests if a set of 2D points are collinear by interpolating a polynomial
 /// through them and checking if its degree is at most 1.
-pub(crate) fn test_colinearity(points: Vec<(FieldElement, FieldElement)>) -> bool {
+pub(super) fn test_colinearity(points: Vec<(FieldElement, FieldElement)>) -> bool {
     let domain = points.iter().map(|p| p.0).collect::<Vec<_>>();
     let values = points.iter().map(|p| p.1).collect::<Vec<_>>();
     let polynomial = interpolate_domain(domain, values);
