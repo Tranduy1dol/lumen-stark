@@ -1,3 +1,4 @@
+pub mod bytes;
 pub mod field;
 pub mod math;
 pub mod polynomial;
