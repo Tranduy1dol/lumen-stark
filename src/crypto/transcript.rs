@@ -30,7 +30,7 @@ impl<F: PrimeField> Transcript<F> {
         f
     }
 
-    pub fn generate_challenge_list_uszie(&mut self, count: usize, domain: usize) -> Vec<usize> {
+    pub fn generate_challenge_list_usize(&mut self, count: usize, domain: usize) -> Vec<usize> {
         (0..count)
             .map(|_| {
                 let challenge = self.generate_a_challenge();
