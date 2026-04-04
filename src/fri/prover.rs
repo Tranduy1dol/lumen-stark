@@ -8,12 +8,11 @@ use crate::{
     fri::layer::FriLayer,
 };
 
-/// Authentication data for one query through all FRI layers
 #[derive(Clone, Debug, Default)]
 pub struct Decommitment<F: PrimeField> {
-    pub evaluations: Vec<F>, // f(x_i) at each layer
+    pub evaluations: Vec<F>,
     pub auth_paths: Vec<MerkleProof<F>>,
-    pub sym_evaluations: Vec<F>, // f(-x_i) at each layer (symmetric point)
+    pub sym_evaluations: Vec<F>,
     pub sym_auth_paths: Vec<MerkleProof<F>>,
 }
 
@@ -22,8 +21,8 @@ pub struct FriProof<F: PrimeField> {
     pub domain_size: usize,
     pub coset: F,
     pub number_of_queries: usize,
-    pub layers_root: Vec<F>, // Merkle roots of each layer
-    pub const_val: F,        // Final constant value
+    pub layers_root: Vec<F>,
+    pub const_val: F,
     pub decommitment_list: Vec<Decommitment<F>>,
 }
 

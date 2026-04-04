@@ -8,7 +8,6 @@ use crate::crypto::merkle::MerkleTree;
 pub struct FriLayer<F: PrimeField> {
     pub evaluations: Vec<F>,
     pub merkle_tree: MerkleTree<F>,
-    coset: F,
     pub domain_size: usize,
 }
 
@@ -27,7 +26,6 @@ impl<F: PrimeField> FriLayer<F> {
         Self {
             evaluations,
             merkle_tree,
-            coset,
             domain_size,
         }
     }
