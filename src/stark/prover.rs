@@ -8,7 +8,11 @@ use ark_poly::{
 };
 
 use crate::{
-    fri::prover::FriProof,
+    crypto::transcript::Transcript,
+    fri::{
+        layer::FriLayer,
+        prover::{FriProof, generate_proof},
+    },
     polynomial::poly_pow,
     stark::air::{Air, BoundaryConstraint},
 };
@@ -18,6 +22,42 @@ pub struct StarkProof<F: PrimeField> {
     pub fri_proof: FriProof<F>,
     pub trace_evaluations: Vec<F>,
     pub trace_roots: Vec<F>,
+}
+
+pub fn prove<F: PrimeField>(trace: Vec<Vec<F>>, air: &Air<F>) -> StarkProof<F> {
+    let t = trace.len();
+    let blowup_factor = 4;
+    let num_queries = 16;
+
+    let domain = <GeneralEvaluationDomain<F> as EvaluationDomain<F>>::new(t).unwrap();
+    let trace_polys = interpolate_trace(&trace);
+
+    let mut transcript = Transcript::new(F::zero());
+    let mut trace_roots = Vec::with_capacity(t);
+    for trace_poly in trace_polys.clone() {
+        let fri_layer = FriLayer::from_poly(&trace_poly, F::GENERATOR, t * blowup_factor);
+        let root = fri_layer.merkle_tree.root();
+
+        trace_roots.push(root);
+        transcript.digest(root);
+    }
+
+    let mut all_quotients = boundary_quotients(&trace_polys, &air.boundary_constraints, &domain);
+    let t_quotients = transition_quotients(&trace_polys, &air.transition_constraints, &domain);
+    all_quotients.extend(t_quotients);
+
+    let mut composition = DensePolynomial::zero();
+    for quotient in all_quotients {
+        let weight = transcript.generate_a_challenge();
+        composition = composition + quotient * DensePolynomial::from_coefficients_vec(vec![weight]);
+    }
+
+    let fri_proof = generate_proof(composition, blowup_factor, num_queries);
+    StarkProof {
+        fri_proof,
+        trace_evaluations: vec![],
+        trace_roots,
+    }
 }
 
 fn interpolate_trace<F: PrimeField>(trace: &[Vec<F>]) -> Vec<DensePolynomial<F>> {
@@ -101,15 +141,4 @@ fn transition_quotients<F: PrimeField>(
     }
 
     polys
-}
-
-pub fn prove<F: PrimeField>(trace: Vec<Vec<F>>, air: &Air<F>) -> StarkProof<F> {
-    // 1. Interpolate trace → trace_polys
-    // 2. Compute boundary quotients
-    // 3. Compute transition quotients
-    // 4. Get random weights from Fiat-Shamir transcript
-    // 5. Combine: composition = Σ weight_i · quotient_i
-    // 6. Run FRI on the composition polynomial
-    // 7. Package everything into StarkProof
-    todo!()
 }

@@ -86,9 +86,7 @@ fn verify_single_query<F: PrimeField>(
                 return Err(anyhow::anyhow!("Final folded value != const_val"));
             }
         } else if folded != decommitment.evaluations[layer_i + 1] {
-            return Err(anyhow::anyhow!(
-                "Folding mismatch at layer {layer_i}"
-            ));
+            return Err(anyhow::anyhow!("Folding mismatch at layer {layer_i}"));
         }
 
         curr_domain_size /= 2;
@@ -98,4 +96,3 @@ fn verify_single_query<F: PrimeField>(
 
     Ok(())
 }
-
