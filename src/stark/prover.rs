@@ -2,20 +2,20 @@ use std::vec;
 
 use ark_ff::{PrimeField, Zero};
 use ark_poly::{
-    DenseMVPolynomial, DenseUVPolynomial, EvaluationDomain, Evaluations, GeneralEvaluationDomain,
-    multivariate::{SparsePolynomial, SparseTerm, Term},
-    univariate::DensePolynomial,
+    DenseUVPolynomial, EvaluationDomain, Evaluations, Polynomial, univariate::DensePolynomial,
 };
 
 use crate::{
-    crypto::transcript::Transcript,
+    crypto::{merkle::MerkleTree, transcript::Transcript},
     fri::{
         layer::FriLayer,
         prover::{FriProof, generate_proof},
     },
-    polynomial::poly_pow,
-    stark::air::{Air, BoundaryConstraint},
+    polynomial::{domain, shift_poly},
+    stark::{air::Air, domain::PreprocessedDomain},
 };
+
+use super::quotient::*;
 
 #[derive(Clone, Debug)]
 pub struct StarkProof<F: PrimeField> {
@@ -24,12 +24,120 @@ pub struct StarkProof<F: PrimeField> {
     pub trace_roots: Vec<F>,
 }
 
+pub fn prove_fast<F: PrimeField>(
+    trace: Vec<Vec<F>>,
+    air: &Air<F>,
+    blowup_factor: usize,
+) -> StarkProof<F> {
+    let t = trace.len();
+    let num_queries = 16;
+    let preprocessed = PreprocessedDomain::<F>::new(air.original_trace_length, blowup_factor);
+
+    let trace_domain = preprocessed.trace_domain;
+    let eval_domain = preprocessed.eval_domain;
+    let e = eval_domain.size();
+    let w = air.num_registers;
+    let omega = trace_domain.group_gen();
+
+    let coset = F::GENERATOR;
+    let trace_polys = interpolate_trace(&trace);
+
+    let mut trace_evals = Vec::with_capacity(w);
+    for trace_poly in &trace_polys {
+        let shifted = shift_poly(trace_poly, coset);
+        let evals = eval_domain.fft(&shifted.coeffs);
+        trace_evals.push(evals);
+    }
+
+    let mut shifted_evals = Vec::with_capacity(w);
+    for trace_poly in &trace_polys {
+        let shifted = shift_poly(trace_poly, omega * coset);
+        let evals = eval_domain.fft(&shifted.coeffs);
+        shifted_evals.push(evals);
+    }
+
+    let mut transcript = Transcript::new(F::zero());
+    let mut trace_roots = Vec::with_capacity(w);
+    for eval in trace_evals.clone() {
+        let tree = MerkleTree::new(eval);
+        let root = tree.root();
+        trace_roots.push(root);
+        transcript.digest(root);
+    }
+
+    // Precompute eval points: x_j = coset · η^j
+    let eval_points = eval_domain
+        .elements()
+        .map(|eta| coset * eta)
+        .collect::<Vec<_>>();
+
+    let mut boundary_quotient_evals_list = Vec::new();
+    for constraint in &air.boundary_constraints {
+        let omega_c = trace_domain.element(constraint.cycle);
+        let mut q_evals = Vec::with_capacity(e);
+        for j in 0..e {
+            let num = trace_evals[constraint.register][j] - constraint.value;
+            let den = eval_points[j] - omega_c;
+            q_evals.push(num / den);
+        }
+        boundary_quotient_evals_list.push(q_evals);
+    }
+
+    let last_point = trace_domain.element(t - 1);
+    let mut transition_zerofier_evals = Vec::with_capacity(e);
+    for eval_point in eval_points.iter().take(e) {
+        let vanishing_val = eval_point.pow([t as u64]) - F::one(); // x^T - 1
+        let tz = vanishing_val / (*eval_point - last_point);
+        transition_zerofier_evals.push(tz);
+    }
+
+    let mut transition_quotient_evals_list = Vec::new();
+    for constraint in &air.transition_constraints {
+        let mut q_evals = Vec::new();
+        for j in 0..e {
+            let mut point = Vec::new();
+
+            for trace_eval in trace_evals.iter().take(w) {
+                point.push(trace_eval[j]);
+            }
+            for shifted_eval in shifted_evals.iter().take(w) {
+                point.push(shifted_eval[j]);
+            }
+
+            let num = constraint.evaluate(&point);
+            q_evals.push(num / transition_zerofier_evals[j]);
+        }
+        transition_quotient_evals_list.push(q_evals);
+    }
+
+    let mut all_quotients_evals = boundary_quotient_evals_list.clone();
+    all_quotients_evals.extend(transition_quotient_evals_list);
+
+    let mut composition_evals = vec![F::zero(); e];
+    for q_evals in all_quotients_evals {
+        let weight = transcript.generate_a_challenge();
+        for j in 0..e {
+            composition_evals[j] += weight * q_evals[j];
+        }
+    }
+
+    let composition =
+        Evaluations::from_vec_and_domain(composition_evals, eval_domain).interpolate();
+    let fri_proof = generate_proof(composition, blowup_factor, num_queries);
+
+    StarkProof {
+        fri_proof,
+        trace_evaluations: vec![],
+        trace_roots,
+    }
+}
+
 pub fn prove<F: PrimeField>(trace: Vec<Vec<F>>, air: &Air<F>) -> StarkProof<F> {
     let t = trace.len();
     let blowup_factor = 4;
     let num_queries = 16;
 
-    let domain = <GeneralEvaluationDomain<F> as EvaluationDomain<F>>::new(t).unwrap();
+    let domain = domain(t);
     let trace_polys = interpolate_trace(&trace);
 
     let mut transcript = Transcript::new(F::zero());
@@ -58,87 +166,4 @@ pub fn prove<F: PrimeField>(trace: Vec<Vec<F>>, air: &Air<F>) -> StarkProof<F> {
         trace_evaluations: vec![],
         trace_roots,
     }
-}
-
-fn interpolate_trace<F: PrimeField>(trace: &[Vec<F>]) -> Vec<DensePolynomial<F>> {
-    let trace_length = trace.len();
-    let domain = <GeneralEvaluationDomain<F> as EvaluationDomain<F>>::new(trace_length).unwrap();
-
-    let num_registers = trace[0].len();
-    let mut trace_polys = Vec::with_capacity(num_registers);
-
-    for j in 0..num_registers {
-        let column: Vec<F> = trace.iter().map(|row| row[j]).collect();
-        let evals = Evaluations::from_vec_and_domain(column, domain);
-        trace_polys.push(evals.interpolate());
-    }
-
-    trace_polys
-}
-
-fn boundary_quotients<F: PrimeField>(
-    trace_polys: &[DensePolynomial<F>],
-    boundary_constraints: &[BoundaryConstraint<F>],
-    domain: &GeneralEvaluationDomain<F>,
-) -> Vec<DensePolynomial<F>> {
-    let mut polys = Vec::with_capacity(boundary_constraints.len());
-
-    for constraint in boundary_constraints {
-        let t_poly = &trace_polys[constraint.register];
-        let numerator = t_poly - DensePolynomial::from_coefficients_vec(vec![constraint.value]);
-        let omega_c = domain.element(constraint.cycle);
-        let denominator = DensePolynomial::from_coefficients_vec(vec![-omega_c, F::one()]);
-        let poly = numerator / denominator;
-
-        polys.push(poly);
-    }
-
-    polys
-}
-
-fn transition_quotients<F: PrimeField>(
-    trace_polys: &[DensePolynomial<F>],
-    transition_constraints: &[SparsePolynomial<F, SparseTerm>],
-    domain: &GeneralEvaluationDomain<F>,
-) -> Vec<DensePolynomial<F>> {
-    let t = domain.size();
-    let omega = domain.group_gen();
-    let w = trace_polys.len();
-
-    let mut polys = Vec::with_capacity(transition_constraints.len());
-    let mut shifted_polys = Vec::with_capacity(transition_constraints.len());
-
-    for trace_poly in trace_polys {
-        let mut shifted_coeffs = Vec::with_capacity(trace_poly.coeffs.len());
-        for (i, coeff) in trace_poly.coeffs.iter().enumerate() {
-            shifted_coeffs.push(*coeff * omega.pow(vec![i as u64]));
-        }
-        shifted_polys.push(DensePolynomial::from_coefficients_vec(shifted_coeffs));
-    }
-
-    let vanishing: DensePolynomial<F> = domain.vanishing_polynomial().into();
-    let last_point = domain.element(t - 1);
-    let exclude_last = DensePolynomial::from_coefficients_vec(vec![-last_point, F::one()]);
-    let transition_zerofier = vanishing / exclude_last;
-
-    for constraint in transition_constraints {
-        let mut numerator = DensePolynomial::<F>::zero();
-        for (coeff, term) in constraint.terms() {
-            let mut mononial = DensePolynomial::from_coefficients_vec(vec![*coeff]);
-            for (var_index, power) in term.vars().iter().zip(term.powers()) {
-                let p = if *var_index < w {
-                    poly_pow(&trace_polys[*var_index], power)
-                } else {
-                    poly_pow(&shifted_polys[*var_index - w], power)
-                };
-                mononial = mononial * p;
-            }
-            numerator = numerator + mononial;
-        }
-
-        let poly = numerator / transition_zerofier.clone();
-        polys.push(poly);
-    }
-
-    polys
 }
