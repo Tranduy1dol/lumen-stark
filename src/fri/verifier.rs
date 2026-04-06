@@ -4,6 +4,7 @@ use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use crate::{
     crypto::{merkle::verify_merkle_proof, transcript::Transcript},
     fri::prover::{Decommitment, FriProof},
+    polynomial::domain,
 };
 
 pub fn verify<F: PrimeField>(proof: &FriProof<F>) -> anyhow::Result<()> {
@@ -55,38 +56,33 @@ fn verify_single_query<F: PrimeField>(
     for (layer_i, &r) in random_r_list.iter().enumerate() {
         let sym_idx = (curr_idx + curr_domain_size / 2) % curr_domain_size;
 
-        // Verify Merkle proofs
         if !verify_merkle_proof(&decommitment.auth_paths[layer_i]) {
-            return Err(anyhow::anyhow!("Merkle proof invalid at layer {layer_i}"));
-        }
-        if !verify_merkle_proof(&decommitment.sym_auth_paths[layer_i]) {
-            return Err(anyhow::anyhow!(
-                "Symmetric Merkle proof invalid at layer {layer_i}"
-            ));
+            return Err(anyhow::anyhow!("merkle proof invalid"));
         }
 
-        // Verify indices match
+        if !verify_merkle_proof(&decommitment.sym_auth_paths[layer_i]) {
+            return Err(anyhow::anyhow!("merkle proof invalid"));
+        }
+
         if decommitment.auth_paths[layer_i].index != curr_idx
             || decommitment.sym_auth_paths[layer_i].index != sym_idx
         {
-            return Err(anyhow::anyhow!("Wrong index at layer {layer_i}"));
+            return Err(anyhow::anyhow!("wrong index"));
         }
 
         let f_x = decommitment.evaluations[layer_i];
         let f_neg_x = decommitment.sym_evaluations[layer_i];
 
-        let domain =
-            <GeneralEvaluationDomain<F> as EvaluationDomain<F>>::new(curr_domain_size).unwrap();
+        let domain: GeneralEvaluationDomain<F> = domain(curr_domain_size);
         let w = domain.element(curr_idx) * curr_coset;
         let folded = (f_x + f_neg_x) / two + r * (f_x - f_neg_x) / (two * w);
 
-        // Check folded value against next layer or const_val
         if layer_i == num_layers - 1 {
             if folded != const_val {
-                return Err(anyhow::anyhow!("Final folded value != const_val"));
+                return Err(anyhow::anyhow!("fodling wrong"));
             }
         } else if folded != decommitment.evaluations[layer_i + 1] {
-            return Err(anyhow::anyhow!("Folding mismatch at layer {layer_i}"));
+            return Err(anyhow::anyhow!("folding wrong"));
         }
 
         curr_domain_size /= 2;

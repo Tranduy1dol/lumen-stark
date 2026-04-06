@@ -3,7 +3,7 @@ use ark_poly::{
     EvaluationDomain, GeneralEvaluationDomain, Polynomial, univariate::DensePolynomial,
 };
 
-use crate::crypto::merkle::MerkleTree;
+use crate::{crypto::merkle::MerkleTree, polynomial::domain};
 
 pub struct FriLayer<F: PrimeField> {
     pub evaluations: Vec<F>,
@@ -13,7 +13,7 @@ pub struct FriLayer<F: PrimeField> {
 
 impl<F: PrimeField> FriLayer<F> {
     pub fn from_poly(poly: &DensePolynomial<F>, coset: F, domain_size: usize) -> Self {
-        let domain = <GeneralEvaluationDomain<F> as EvaluationDomain<F>>::new(domain_size).unwrap();
+        let domain: GeneralEvaluationDomain<F> = domain(domain_size);
         let evaluations = domain
             .elements()
             .map(|root| {
