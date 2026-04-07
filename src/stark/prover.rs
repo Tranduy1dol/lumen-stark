@@ -28,6 +28,7 @@ pub fn prove_fast<F: PrimeField>(
     trace: Vec<Vec<F>>,
     air: &Air<F>,
     blowup_factor: usize,
+    transcript: &mut Transcript<F>,
 ) -> StarkProof<F> {
     let t = trace.len();
     let num_queries = 16;
@@ -56,7 +57,6 @@ pub fn prove_fast<F: PrimeField>(
         shifted_evals.push(evals);
     }
 
-    let mut transcript = Transcript::new(F::zero());
     let mut trace_roots = Vec::with_capacity(w);
     for eval in trace_evals.clone() {
         let tree = MerkleTree::new(eval);
@@ -123,7 +123,7 @@ pub fn prove_fast<F: PrimeField>(
 
     let composition =
         Evaluations::from_vec_and_domain(composition_evals, eval_domain).interpolate();
-    let fri_proof = generate_proof(composition, blowup_factor, num_queries);
+    let fri_proof = generate_proof(composition, blowup_factor, num_queries, transcript);
 
     StarkProof {
         fri_proof,
@@ -132,7 +132,11 @@ pub fn prove_fast<F: PrimeField>(
     }
 }
 
-pub fn prove<F: PrimeField>(trace: Vec<Vec<F>>, air: &Air<F>) -> StarkProof<F> {
+pub fn prove<F: PrimeField>(
+    trace: Vec<Vec<F>>,
+    air: &Air<F>,
+    transcript: &mut Transcript<F>,
+) -> StarkProof<F> {
     let t = trace.len();
     let blowup_factor = 4;
     let num_queries = 16;
@@ -140,7 +144,6 @@ pub fn prove<F: PrimeField>(trace: Vec<Vec<F>>, air: &Air<F>) -> StarkProof<F> {
     let domain = domain(t);
     let trace_polys = interpolate_trace(&trace);
 
-    let mut transcript = Transcript::new(F::zero());
     let mut trace_roots = Vec::with_capacity(t);
     for trace_poly in trace_polys.clone() {
         let fri_layer = FriLayer::from_poly(&trace_poly, F::GENERATOR, t * blowup_factor);
@@ -160,7 +163,7 @@ pub fn prove<F: PrimeField>(trace: Vec<Vec<F>>, air: &Air<F>) -> StarkProof<F> {
         composition = composition + quotient * DensePolynomial::from_coefficients_vec(vec![weight]);
     }
 
-    let fri_proof = generate_proof(composition, blowup_factor, num_queries);
+    let fri_proof = generate_proof(composition, blowup_factor, num_queries, transcript);
     StarkProof {
         fri_proof,
         trace_evaluations: vec![],

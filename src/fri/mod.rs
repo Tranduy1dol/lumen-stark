@@ -4,11 +4,12 @@ pub mod verifier;
 
 #[cfg(test)]
 mod tests {
+    use ark_ff::Zero;
+    use ark_poly::{DenseUVPolynomial, univariate::DensePolynomial};
+
+    use crate::crypto::transcript::Transcript;
     use crate::field::Fq;
-    use crate::fri::prover::generate_proof;
-    use crate::fri::verifier::verify;
-    use ark_poly::DenseUVPolynomial;
-    use ark_poly::univariate::DensePolynomial;
+    use crate::fri::{prover::generate_proof, verifier::verify};
 
     #[test]
     fn test_fri_roundtrip_degree_3() {
@@ -18,8 +19,11 @@ mod tests {
             Fq::from(3),
             Fq::from(4),
         ]);
-        let proof = generate_proof(poly, 2, 2); // blowup=2, queries=2
-        assert!(verify(&proof).is_ok());
+        let mut prover_transcript = Transcript::new(Fq::zero());
+        let proof = generate_proof(poly, 2, 2, &mut prover_transcript);
+
+        let mut verifier_transcript = Transcript::new(Fq::zero());
+        assert!(verify(&proof, &mut verifier_transcript).is_ok());
     }
 
     #[test]
@@ -32,8 +36,11 @@ mod tests {
             Fq::from(5),
             Fq::from(6),
         ]);
-        let proof = generate_proof(poly, 2, 2);
-        assert!(verify(&proof).is_ok());
+        let mut prover_transcript = Transcript::new(Fq::zero());
+        let proof = generate_proof(poly, 2, 2, &mut prover_transcript);
+
+        let mut verifier_transcript = Transcript::new(Fq::zero());
+        assert!(verify(&proof, &mut verifier_transcript).is_ok());
     }
 
     #[test]
@@ -44,8 +51,11 @@ mod tests {
             Fq::from(3),
             Fq::from(4),
         ]);
-        let mut proof = generate_proof(poly, 2, 2);
+        let mut prover_transcript = Transcript::new(Fq::zero());
+        let mut proof = generate_proof(poly, 2, 2, &mut prover_transcript);
         proof.const_val -= Fq::from(1); // tamper!
-        assert!(verify(&proof).is_err());
+
+        let mut verifier_transcript = Transcript::new(Fq::zero());
+        assert!(verify(&proof, &mut verifier_transcript).is_err());
     }
 }

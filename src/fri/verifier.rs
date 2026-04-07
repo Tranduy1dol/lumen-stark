@@ -7,8 +7,10 @@ use crate::{
     polynomial::domain,
 };
 
-pub fn verify<F: PrimeField>(proof: &FriProof<F>) -> anyhow::Result<()> {
-    let mut transcript = Transcript::new(F::ZERO);
+pub fn verify<F: PrimeField>(
+    proof: &FriProof<F>,
+    transcript: &mut Transcript<F>,
+) -> anyhow::Result<()> {
     let random_r_list: Vec<F> = proof
         .layers_root
         .iter()

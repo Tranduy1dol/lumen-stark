@@ -6,10 +6,11 @@ pub mod verifier;
 
 #[cfg(test)]
 mod tests {
-    use ark_ff::PrimeField;
+    use ark_ff::{PrimeField, Zero};
     use ark_poly::DenseMVPolynomial;
     use ark_poly::multivariate::{SparsePolynomial, SparseTerm, Term};
 
+    use crate::crypto::transcript::Transcript;
     use crate::field::Fq;
     use crate::stark::air::{Air, BoundaryConstraint};
     use crate::stark::prover::{prove, prove_fast};
@@ -56,8 +57,11 @@ mod tests {
         let output = trace[trace_length - 1][0];
         let air = repeated_squaring_air(trace_length, input, output);
 
-        let proof = prove(trace, &air);
-        assert!(verify(&proof, &air).is_ok());
+        let mut prover_transcript = Transcript::new(Fq::zero());
+        let proof = prove(trace, &air, &mut prover_transcript);
+
+        let mut verifier_transcript = Transcript::new(Fq::zero());
+        assert!(verify(&proof, &air, &mut verifier_transcript).is_ok());
     }
 
     #[test]
@@ -74,15 +78,21 @@ mod tests {
         let output = trace[trace_length - 1][0];
         let air = repeated_squaring_air(trace_length, input, output);
 
-        let proof = prove_fast(trace, &air, 4);
-        assert!(verify(&proof, &air).is_ok());
+        let mut prover_transcript = Transcript::new(Fq::zero());
+        let proof = prove_fast(trace, &air, 4, &mut prover_transcript);
+
+        let mut verifier_transcript = Transcript::new(Fq::zero());
+        assert!(verify(&proof, &air, &mut verifier_transcript).is_ok());
     }
 
     #[test]
     fn bench_naive_vs_fast() {
         use std::time::Instant;
 
-        println!("\n{:<15} {:>12} {:>12} {:>10}", "Trace Length", "Naive", "Fast", "Speedup");
+        println!(
+            "\n{:<15} {:>12} {:>12} {:>10}",
+            "Trace Length", "Naive", "Fast", "Speedup"
+        );
         println!("{:-<52}", "");
 
         for trace_length in [64, 256, 1024] {
@@ -98,11 +108,13 @@ mod tests {
             let air = repeated_squaring_air(trace_length, input, output);
 
             let start = Instant::now();
-            let _proof_naive = prove(trace.clone(), &air);
+            let mut transcript = Transcript::new(Fq::zero());
+            let _proof_naive = prove(trace.clone(), &air, &mut transcript);
             let naive_time = start.elapsed();
 
             let start = Instant::now();
-            let _proof_fast = prove_fast(trace, &air, 4);
+            let mut transcript = Transcript::new(Fq::zero());
+            let _proof_fast = prove_fast(trace, &air, 4, &mut transcript);
             let fast_time = start.elapsed();
 
             println!(
@@ -135,7 +147,10 @@ mod tests {
         // NOTE: The basic verifier only checks FRI on the composition poly.
         // The prover's poly division "cleans up" the error, so FRI still passes.
         // Detecting tampered traces requires DEEP-ALI (future improvement).
-        let proof = prove(trace, &air);
-        assert!(verify(&proof, &air).is_ok()); // sadly passes with basic verifier
+        let mut prover_transcript = Transcript::new(Fq::zero());
+        let proof = prove(trace, &air, &mut prover_transcript);
+
+        let mut verifier_transcript = Transcript::new(Fq::zero());
+        assert!(verify(&proof, &air, &mut verifier_transcript).is_ok()); // sadly passes with basic verifier
     }
 }

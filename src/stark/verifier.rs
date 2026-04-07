@@ -5,8 +5,11 @@ use crate::{
     stark::{air::Air, prover::StarkProof},
 };
 
-pub fn verify<F: PrimeField>(proof: &StarkProof<F>, air: &Air<F>) -> anyhow::Result<()> {
-    let mut transcript = Transcript::new(F::zero());
+pub fn verify<F: PrimeField>(
+    proof: &StarkProof<F>,
+    air: &Air<F>,
+    transcript: &mut Transcript<F>,
+) -> anyhow::Result<()> {
     for root in &proof.trace_roots {
         transcript.digest(*root);
     }
@@ -20,7 +23,7 @@ pub fn verify<F: PrimeField>(proof: &StarkProof<F>, air: &Air<F>) -> anyhow::Res
         weight.push(transcript.generate_a_challenge());
     }
 
-    crate::fri::verifier::verify(&proof.fri_proof)?;
+    crate::fri::verifier::verify(&proof.fri_proof, transcript)?;
 
     Ok(())
 }

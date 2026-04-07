@@ -30,10 +30,10 @@ pub fn generate_proof<F: PrimeField>(
     poly: DensePolynomial<F>,
     blowup_factor: usize,
     number_of_queries: usize,
+    transcript: &mut Transcript<F>,
 ) -> FriProof<F> {
     let domain_size = (poly.degree() + 1).next_power_of_two() * blowup_factor;
     let coset = F::GENERATOR;
-    let mut transcript = Transcript::new(F::zero());
 
     let mut layers = Vec::new();
     let mut layers_root = Vec::new();
