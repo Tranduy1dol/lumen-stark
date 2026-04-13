@@ -1,5 +1,7 @@
 # stark
 
+[![codecov](https://codecov.io/gh/Tranduy1dol/stark/graph/badge.svg?token=ZZWJ8SCUWB)](https://codecov.io/gh/Tranduy1dol/stark)
+
 A STARK (Scalable Transparent ARgument of Knowledge) implementation in Rust using the [arkworks](https://github.com/arkworks-rs) ecosystem, following [Anatomy of a STARK](https://aszepieniec.github.io/stark-anatomy/).
 
 ## Features
